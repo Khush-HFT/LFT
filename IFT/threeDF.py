@@ -7,6 +7,7 @@ from datetime import datetime as dt
 import datetime as d
 import requests
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime as dt
 
 class DataLoader:
     # @staticmethod
