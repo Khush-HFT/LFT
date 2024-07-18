@@ -70,16 +70,6 @@ class FinancialDataReader:
     def __init__(self, api_key):
         self.api_key = api_key
 
-    # def get_key_metrics(self, symbol, period="quarter"):
-    #     data = fmpsdk.key_metrics(apikey=self.api_key, symbol=symbol, period=period, limit=18)
-    #     data2 = fmpsdk.income_statement(apikey=self.api_key, symbol=symbol, period=period, limit=18)
-
-    #     df1 = pd.DataFrame(data)
-    #     df2 = pd.DataFrame(data2)
-
-    #     return pd.merge(df1, df2, on='date')
-        # data = fmpsdk.key_metrics(apikey=self.api_key, symbol=symbol, period=period, limit=18)
-        # return pd.DataFrame(data)
 
     def get_key_metrics(self, symbol, period="quarter"):
     # Retrieve data from fmpsdk
@@ -114,7 +104,7 @@ def main():  # sourcery skip: remove-dict-keys
     # }
 
     data_dict = {name: (("date", "company"), np.zeros((len(dates), len(companies)))) for name in [
-        "revenuePerShare", "netIncomePerShare", "operatingCashFlowPerShare", "freeCashFlowPerShare", "cashPerShare",
+        "netProfitMargin", "revenuePerShare", "netIncomePerShare", "operatingCashFlowPerShare", "freeCashFlowPerShare", "cashPerShare",
         "bookValuePerShare", "tangibleBookValuePerShare", "shareholdersEquityPerShare", "marketCap",
         "enterpriseValue", "peRatio", "pbRatio", "debtToEquity", "currentRatio", "interestCoverage", "roe",
         "freeCashFlowYield", "eps"
@@ -139,7 +129,10 @@ def main():  # sourcery skip: remove-dict-keys
                 index = fundamental_map[company][fundamental_map[company]['date'] == new_date].index[0]
                 for metric in data_dict.keys():
                     if metric not in column_names:
-                        df.loc[(date, company), metric] = fundamental_map[company].loc[index, metric]
+                        if metric == 'netProfitMargin':
+                            df.loc[(date, company), metric] = fundamental_map[company].loc[index, 'netIncome'] / fundamental_map[company].loc[index, 'revenue']
+                        else:
+                            df.loc[(date, company), metric] = fundamental_map[company].loc[index, metric]
                         # print(df.at[(date, company), column_name], fundamental_map[company].at[index, metric])
 
             filtered_df = stock_map.get(company, pd.DataFrame())

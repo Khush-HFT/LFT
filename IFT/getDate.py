@@ -3,7 +3,8 @@ import datetime as dt
 import requests
 access_token = 'eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI3TUFQVEEiLCJqdGkiOiI2Njc4YzdhZmJlMzlkYzM0Y2E3MjVjMjAiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaWF0IjoxNzE5MTkxNDcxLCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3MTkyNjY0MDB9.c_4h6cHcN2y9UkYG_MzMkHYaunio4g1ipRTDLUZRYcs'
 
-to_date = dt.datetime.now().date() - dt.timedelta(days = 1)
+# to_date = dt.datetime.now().date() - dt.timedelta(days = 1)
+to_date = dt.datetime(2024, 6, 30).date()
 
 #from date = July 1st 2020
 from_date = dt.datetime(2020, 7, 1).date()

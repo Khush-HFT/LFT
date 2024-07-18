@@ -13,6 +13,7 @@ class FundamentalData:
 
     @property
     def rps(self):
+        print(self.data.to_dataframe())
         return self.data['revenuePerShare'].to_dataframe()
 
     @property
@@ -26,6 +27,20 @@ class FundamentalData:
     @property
     def eps(self):
         return self.data['eps'].to_dataframe()
+    
+    @property
+    def pbr(self):
+        return self.data['pbRatio'].to_dataframe()
+    
+    @property
+    def dte(self):
+        return self.data['debtToEquity'].to_dataframe()
+    
+    @property
+    def npm(self):
+        return self.data['netProfitMargin'].to_dataframe()
+
+
     
    
 
@@ -284,12 +299,24 @@ def alpha_example_2(fundamental_data):
     return delta(fundamental_data.rps) / fundamental_data.market_cap
 
 def alpha_example_3(fundamental_data):
-    return rank(delta(fundamental_data.rps)) / fundamental_data.market_cap
+    return rank(delta(fundamental_data.rps)) 
 
+def alpha_example_4(fundamental_data):
+    fundamental_data_npm = fundamental_data.npm
+    fundamental_data_pbr = fundamental_data.pbr
+    fundamental_data_dte = fundamental_data.dte
+    # sourcery skip: avoid-builtin-shadow
+    for company in fundamental_data_npm.index.get_level_values('company').unique():
+        for date in fundamental_data_npm.index.get_level_values('date').unique():
+            # data.loc[(date, company), 'vwap'] = np.nan
+            sum = fundamental_data_npm.loc[(date, company), 'netProfitMargin'] + fundamental_data_pbr.loc[(date, company), 'pbRatio'] + fundamental_data_dte.loc[(date, company), 'debtToEquity']
+
+            fundamental_data_npm.loc[(date, company), 'netProfitMargin'] = sum
+    fundamental_data_npm.rename(columns={'netProfitMargin': 'alpha_example_4_result'}, inplace=True)
+    return fundamental_data_npm
 
 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc')
-    # print(adx(obj.data, 14))
-    # print(vwap(obj.data, 1))
-    print(obj.eps[:50])
+    print(alpha_example_3(obj))
+
