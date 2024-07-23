@@ -73,12 +73,15 @@ class FinancialDataReader:
 
     def get_key_metrics(self, symbol, period="quarter"):
     # Retrieve data from fmpsdk
-        data = fmpsdk.key_metrics(apikey=self.api_key, symbol=symbol, period=period, limit=18)
+        data1 = fmpsdk.key_metrics(apikey=self.api_key, symbol=symbol, period=period, limit=18)
         data2 = fmpsdk.income_statement(apikey=self.api_key, symbol=symbol, period=period, limit=18)
+        data3 = fmpsdk.company_profile(apikey=self.api_key, symbol=symbol)
+        data3 = pd.DataFrame(data3)
 
-        # Convert to DataFrames and merge on 'date'
-        return pd.merge(pd.DataFrame(data), pd.DataFrame(data2), on='date')
-def main():  # sourcery skip: remove-dict-keys
+        data =  pd.merge(pd.DataFrame(data1), pd.DataFrame(data2), on='date')
+        data['sector'] = data3['sector'].values[0]
+        return data, data3
+def process_data():  # sourcery skip: remove-dict-keys
 
     column_names = ['open', 'high', 'low', 'close', 'volume'] #change
     companies, dates, stock_map = DataLoader.load_data()
@@ -88,10 +91,19 @@ def main():  # sourcery skip: remove-dict-keys
 
     fundamental_map = {}
     df = pd.DataFrame()
+    s_df = pd.DataFrame()
     for company in companies:
-        data_df = financial_data_reader.get_key_metrics(company + '.NS')
+        data_df, sector_df = financial_data_reader.get_key_metrics(company + '.NS')
+
+        if s_df.empty:
+            s_df = pd.DataFrame(sector_df)
+        else:   
+            s_df = pd.concat([s_df, pd.DataFrame(sector_df)], ignore_index=True)
+        
+
         if data_df.empty:
             continue
+
         data_df['date'] = pd.to_datetime(data_df['date']) + pd.DateOffset(days=1)
         if df.empty:
             df = pd.DataFrame(data_df)
@@ -99,6 +111,7 @@ def main():  # sourcery skip: remove-dict-keys
             df = pd.concat([df, pd.DataFrame(data_df)], ignore_index=True)
         fundamental_map[company] = data_df
     df.to_csv('fundamentalData.csv', index=False)
+    s_df.to_csv('sectorData.csv', index=False)
     # data_dict = {
     #     "firmFundamentals": (("date", "company"), np.empty((len(dates), len(companies)), dtype=object)),
     # }
@@ -109,6 +122,7 @@ def main():  # sourcery skip: remove-dict-keys
         "enterpriseValue", "peRatio", "pbRatio", "debtToEquity", "currentRatio", "interestCoverage", "roe",
         "freeCashFlowYield", "eps"
     ]}
+    # data_dict["sector"] = (("date", "company"), np.full((len(dates), len(companies)), '', dtype=object))
 
     # for i in range(len(dates)):
     #     for j in range(len(companies)):
@@ -129,6 +143,7 @@ def main():  # sourcery skip: remove-dict-keys
                 index = fundamental_map[company][fundamental_map[company]['date'] == new_date].index[0]
                 for metric in data_dict.keys():
                     if metric not in column_names:
+
                         if metric == 'netProfitMargin':
                             df.loc[(date, company), metric] = fundamental_map[company].loc[index, 'netIncome'] / fundamental_map[company].loc[index, 'revenue']
                         else:
@@ -141,14 +156,15 @@ def main():  # sourcery skip: remove-dict-keys
                 for column_name in column_names:
                     if not filtered_data.empty: 
                         df.at[(date, company), column_name] = filtered_data[column_name].values[0]
-    # print(df)
+    print(df)
     #print revenue per share of 3MINDIA on 2020-07-01
-    
     ds = df.to_xarray()
+
+# Check if the file exists
+    # if os.path.exists(filename):
+        # os.remove(filename)
+
     ds.to_netcdf('my_3d_dataarray.nc')
-    # print(ds)
-    # print(stock_map['3MINDIA'])
-    print(ds.to_dataframe())
 
 if __name__ == "__main__":
-    main()
+    process_data()

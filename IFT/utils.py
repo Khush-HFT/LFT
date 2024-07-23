@@ -4,16 +4,18 @@ import xarray as xr
 from threeDF import DataLoader
 import datetime as dt
 from scipy.stats import rankdata
+import itertools
+import matplotlib.pyplot as plt
 
 class FundamentalData:
-    def __init__(self, dates_file, stocks_file, data_file):
+    def __init__(self, dates_file, stocks_file, data_file, sector_file):
         self.date_df = pd.read_csv(dates_file)
         self.stocks_df = pd.read_csv(stocks_file)
         self.data = xr.open_dataset(data_file)
+        self.sectorData = pd.read_csv(sector_file)
 
     @property
     def rps(self):
-        print(self.data.to_dataframe())
         return self.data['revenuePerShare'].to_dataframe()
 
     @property
@@ -41,6 +43,114 @@ class FundamentalData:
         return self.data['netProfitMargin'].to_dataframe()
 
 
+class FinancialDataProcessor:
+    def __init__(self, dates_file, stocks_file, data_file, sector_file, alpha_function):
+        self.fundamental_data = FundamentalData(dates_file, stocks_file, data_file, sector_file)
+        self.alpha_function = alpha_function
+        self.dates = self.fundamental_data.date_df
+        self.stocks = self.fundamental_data.stocks_df
+        self.data = self.fundamental_data.data.to_dataframe()
+        self.weight_matrix = np.zeros((len(self.dates), len(self.stocks)))
+        self.normalized_weight_matrix = None
+        self.pnl_matrix = np.zeros((len(self.dates), len(self.stocks)))
+        self.cumulative_pnl_matrix = np.zeros((len(self.dates), len(self.stocks)))
+        self.all_sectors = self.fundamental_data.sectorData['sector'].unique()
+        self.sector_stocks = []
+
+
+    def calculate_weights(self, sector_name):
+        alpha_values = self.alpha_function(self.fundamental_data)
+        if sector_name == "All":
+
+            for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
+                self.weight_matrix[i, j] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+
+        else:
+
+            if sector_name not in self.all_sectors:
+                raise ValueError("Sector not found")
+            
+            self.sector_stocks = [
+                self.fundamental_data.sectorData['symbol'][i]
+                for i in range(len(self.fundamental_data.sectorData))
+                if self.fundamental_data.sectorData['sector'][i] == sector_name
+            ]
+            self.weight_matrix = np.zeros((len(self.dates), len(self.sector_stocks)))
+
+            for i in range(len(self.dates)):
+                k = 0
+                for j in range(len(self.stocks)):
+                    check_stock = self.stocks['Symbol'][j] + '.NS'
+                    if check_stock in self.sector_stocks:
+                        self.weight_matrix[i, k] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+                        k += 1
+
+        weights = self.weight_matrix.flatten()
+        normalized_weights = weights - np.mean(weights)
+        total_abs_sum = np.sum(np.abs(normalized_weights))
+        adjustment_factor = 250 / total_abs_sum
+        adjusted_weights = normalized_weights * adjustment_factor
+        self.normalized_weight_matrix = adjusted_weights.reshape(self.weight_matrix.shape)
+        print(self.all_sectors)
+
+
+    def calculate_pnl(self, sector_name):
+        
+        if sector_name == "All":
+            for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
+                daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
+                            self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
+                daily_pnl *= self.normalized_weight_matrix[i, j]
+                self.pnl_matrix[i, j] = daily_pnl
+        else:
+            if sector_name not in self.all_sectors:
+                raise ValueError("Sector not found")
+            self.pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
+            self.cumulative_pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
+
+            for i in range(len(self.dates)):
+                k = 0
+                for j in range(len(self.stocks)):
+                    check_stock = self.stocks['Symbol'][j] + '.NS'
+                    if check_stock in self.sector_stocks:
+                        daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
+                            self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
+                        daily_pnl *= self.normalized_weight_matrix[i, k]
+                        self.pnl_matrix[i, k] = daily_pnl
+                        k += 1
+
+
+        for i in range(len(self.dates)):
+            if i == 0:
+                self.cumulative_pnl_matrix[i, :] = self.pnl_matrix[i, :]
+            else:
+                self.cumulative_pnl_matrix[i, :] = self.cumulative_pnl_matrix[i-1, :] + self.pnl_matrix[i, :]
+        print(self.cumulative_pnl_matrix)
+        return self.cumulative_pnl_matrix
+
+    def plot_daily_pnl(self, sector_name):
+        if sector_name == "All":
+            pnl_df = pd.DataFrame(self.pnl_matrix, index=self.dates['date'], columns=self.stocks['Symbol'])
+        else:   
+            pnl_df = pd.DataFrame(self.pnl_matrix, index=self.dates['date'], columns=self.sector_stocks)
+
+        daily_pnl = pnl_df.sum(axis=1)
+        daily_pnl.plot()
+        plt.xlabel('Date')
+        plt.ylabel('PnL')
+        plt.show()
+
+    def plot_cumulative_pnl(self, sector_name):
+        if sector_name == "All":
+            cumulative_pnl_df = pd.DataFrame(self.cumulative_pnl_matrix, index=self.dates['date'], columns=self.stocks['Symbol'])
+        else:
+            cumulative_pnl_df = pd.DataFrame(self.cumulative_pnl_matrix, index=self.dates['date'], columns=self.sector_stocks)
+        cumulative_pnl = cumulative_pnl_df.sum(axis=1)
+        cumulative_pnl.plot()
+        plt.xlabel('Date')
+        plt.ylabel('Cumulative PnL')
+        plt.title('Cumulative PnL Over Time')
+        plt.show()
     
    
 
@@ -299,7 +409,17 @@ def alpha_example_2(fundamental_data):
     return delta(fundamental_data.rps) / fundamental_data.market_cap
 
 def alpha_example_3(fundamental_data):
-    return rank(delta(fundamental_data.rps)) 
+    data =  rank(delta(fundamental_data.rps)) 
+
+    market_cap_data = fundamental_data.market_cap
+    for company in data.index.get_level_values('company').unique():
+        for date in data.index.get_level_values('date').unique():
+            if market_cap_data.loc[(date, company), 'marketCap'] == 0:
+                data.loc[(date, company), 'revenuePerShare'] = np.nan
+            else:
+                data.loc[(date, company), 'revenuePerShare'] = data.loc[(date, company), 'revenuePerShare'] / market_cap_data.loc[(date, company), 'marketCap']
+    data.rename(columns={'revenuePerShare': 'alpha_example_3_result'}, inplace=True)
+    return data
 
 def alpha_example_4(fundamental_data):
     fundamental_data_npm = fundamental_data.npm
@@ -315,8 +435,18 @@ def alpha_example_4(fundamental_data):
     fundamental_data_npm.rename(columns={'netProfitMargin': 'alpha_example_4_result'}, inplace=True)
     return fundamental_data_npm
 
+def alpha_example_5(fundamental_data):
+    fundamental_data_npm = fundamental_data.npm
+    fundamental_data_pbr = fundamental_data.pbr
+    for company in fundamental_data_npm.index.get_level_values('company').unique():
+        for date in fundamental_data_npm.index.get_level_values('date').unique():
+            sum = fundamental_data_npm.loc[(date, company), 'netProfitMargin'] + fundamental_data_pbr.loc[(date, company), 'pbRatio']
+            fundamental_data_npm.loc[(date, company), 'netProfitMargin'] = sum
+    fundamental_data_npm.rename(columns={'netProfitMargin': 'alpha_example_5_result'}, inplace=True)
+    return fundamental_data_npm
+
 
 if __name__ == "__main__":
-    obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc')
+    obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
     print(alpha_example_3(obj))
 
