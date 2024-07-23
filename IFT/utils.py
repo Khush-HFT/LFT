@@ -14,9 +14,7 @@ class FundamentalData:
         self.data = xr.open_dataset(data_file)
         self.sectorData = pd.read_csv(sector_file)
 
-    @property
-    def rps(self):
-        return self.data['revenuePerShare'].to_dataframe()
+   
 
     @property
     def market_cap(self):
@@ -30,17 +28,266 @@ class FundamentalData:
     def eps(self):
         return self.data['eps'].to_dataframe()
     
+    
+    @property
+    def npm(self):
+        return self.data['netProfitMargin'].to_dataframe()
+    
+    @property
+    def cr(self):
+        return self.data['currentRatio'].to_dataframe()
+
+    @property
+    def per(self):
+        return self.data['peRatio'].to_dataframe()
+    
+    @property
+    def ptsr(self):
+        return self.data['priceToSalesRatio'].to_dataframe()
+    
+    @property
+    def pocfr(self):
+        return self.data['pocfratio'].to_dataframe()
+    
+    @property
+    def pfcf(self):
+        return self.data['pfcfRatio'].to_dataframe()
+
     @property
     def pbr(self):
         return self.data['pbRatio'].to_dataframe()
+    
+    @property
+    def ev_to_sales(self):
+        return self.data['evToSales'].to_dataframe()
+    
+    @property
+    def enterprise_value_over_ebitda(self):
+        return self.data['enterpriseValueOverEBITDA'].to_dataframe()
+    
+    @property
+    def ev_to_operating_cash_flow(self):
+        return self.data['evToOperatingCashFlow'].to_dataframe()
+    
+    @property
+    def earnings_yield(self):
+        return self.data['earningsYield'].to_dataframe()
+    
+    @property
+    def free_cash_flow_yield(self):
+        return self.data['freeCashFlowYield'].to_dataframe()
     
     @property
     def dte(self):
         return self.data['debtToEquity'].to_dataframe()
     
     @property
-    def npm(self):
+    def debt_to_assets(self):
+        return self.data['debtToAssets'].to_dataframe()
+    
+    @property
+    def net_debt_to_ebitda(self):
+        return self.data['netDebtToEBITDA'].to_dataframe()
+    
+    @property
+    def interest_coverage(self):
+        return self.data['interestCoverage'].to_dataframe()
+    
+    @property
+    def income_quality(self):
+        return self.data['incomeQuality'].to_dataframe()
+
+    @property
+    def dividend_yield(self):
+        return self.data['dividendYield'].to_dataframe()
+
+    @property
+    def payout_ratio(self):
+        return self.data['payoutRatio'].to_dataframe()
+
+    @property
+    def sales_general_and_administrative_to_revenue(self):
+        return self.data['salesGeneralAndAdministrativeToRevenue'].to_dataframe()
+    
+    @property
+    def return_on_tangible_assets(self):
+        return self.data['returnOnTangibleAssets'].to_dataframe()
+    
+    @property
+    def working_capital(self):
+        return self.data['workingCapital'].to_dataframe()
+    
+    @property
+    def tangible_asset_value(self):
+        return self.data['tangibleAssetValue'].to_dataframe()
+
+    @property
+    def net_current_asset_value(self):
+        return self.data['netCurrentAssetValue'].to_dataframe()
+    
+    @property
+    def average_receivables(self):
+        return self.data['averageReceivables'].to_dataframe()
+    
+    @property
+    def receivables_turnover(self):
+        return self.data['receivablesTurnover'].to_dataframe()
+    
+    @property
+    def rps(self):
+        return self.data['revenuePerShare'].to_dataframe()
+    
+    @property
+    def roe(self):
+        return self.data['roe'].to_dataframe()
+
+    @property
+    def capex_per_share(self):
+        return self.data['capexPerShare'].to_dataframe()
+    
+    @property
+    def quick_ratio(self):
+        return self.data['quickRatio'].to_dataframe()
+
+    @property
+    def cash_ratio(self):
+        return self.data['cashRatio'].to_dataframe()
+    
+    @property
+    def gross_profit_margin(self):
+        return self.data['grossProfitMargin'].to_dataframe()
+    
+    @property
+    def return_on_assets(self):
+        return self.data['returnOnAssets'].to_dataframe()
+
+    @property
+    def return_on_capital_employed(self):
+        return self.data['returnOnCapitalEmployed'].to_dataframe()
+
+    @property
+    def company_equity_multiplier(self):
+        return self.data['companyEquityMultiplier'].to_dataframe()
+    
+    @property
+    def net_income_per_ebt(self):
+        return self.data['netIncomePerEBT'].to_dataframe()
+
+    @property
+    def long_term_debt_to_capitalization(self):
+        return self.data['longTermDebtToCapitalization'].to_dataframe()
+
+    @property
+    def total_debt_to_capitalization(self):
+        return self.data['totalDebtToCapitalization'].to_dataframe()
+    
+    @property
+    def fixed_asset_turnover(self):
+        return self.data['fixedAssetTurnover'].to_dataframe()
+
+    @property
+    def operating_cash_flow_per_share(self):
+        return self.data['operatingCashFlowPerShare'].to_dataframe()
+    
+    @property
+    def free_cash_flow_per_share(self):
+        return self.data['freeCashFlowPerShare'].to_dataframe()
+    
+    @property
+    def cash_flow_coverage_ratios(self):
+        return self.data['cashFlowCoverageRatios'].to_dataframe()
+
+    @property
+    def short_term_coverage_ratios(self):
+        return self.data['shortTermCoverageRatios'].to_dataframe()
+
+    @property
+    def capital_expenditure_coverage_ratio(self):
+        return self.data['capitalExpenditureCoverageRatio'].to_dataframe()
+    
+    @property
+    def dividend_paid_and_capex_coverage_ratio(self):
+        return self.data['dividendPaidAndCapexCoverageRatio'].to_dataframe()
+    
+    @property
+    def days_of_sales_outstanding(self):
+        return self.data['daysOfSalesOutstanding'].to_dataframe()
+
+    @property
+    def days_of_inventory_outstanding(self):
+        return self.data['daysOfInventoryOutstanding'].to_dataframe()
+    
+    @property
+    def operating_cycle(self):
+        return self.data['operatingCycle'].to_dataframe()
+
+    @property
+    def days_of_payables_outstanding(self):
+        return self.data['daysOfPayablesOutstanding'].to_dataframe()
+    
+    @property
+    def cash_conversion_cycle(self):
+        return self.data['cashConversionCycle'].to_dataframe()
+    
+    @property
+    def operating_profit_margin(self):
+        return self.data['operatingProfitMargin'].to_dataframe()
+
+    @property
+    def pretax_profit_margin(self):
+        return self.data['pretaxProfitMargin'].to_dataframe()
+    
+    @property
+    def net_profit_margin(self):
         return self.data['netProfitMargin'].to_dataframe()
+
+    @property
+    def effective_tax_rate(self):
+        return self.data['effectiveTaxRate'].to_dataframe()
+
+    @property
+    def net_income_per_ebt(self):
+        return self.data['netIncomePerEBT'].to_dataframe()
+
+    @property
+    def ebt_per_ebit(self):
+        return self.data['ebtPerEbit'].to_dataframe()
+    
+    @property
+    def debt_ratio(self):
+        return self.data['debtRatio'].to_dataframe()
+
+    @property
+    def debt_equity_ratio(self):
+        return self.data['debtEquityRatio'].to_dataframe()
+    
+    @property
+    def cash_flow_to_debt_ratio(self):
+        return self.data['cashFlowToDebtRatio'].to_dataframe()
+    
+    @property
+    def asset_turnover(self):
+        return self.data['assetTurnover'].to_dataframe()
+    
+    @property
+    def capital_expenditure_coverage_ratio(self):
+        return self.data['capitalExpenditureCoverageRatio'].to_dataframe()
+    
+    @property
+    def price_earnings_to_growth_ratio(self):
+        return self.data['priceEarningsToGrowthRatio'].to_dataframe()
+    
+    @property
+    def enterprise_value_multiple(self):
+        return self.data['enterpriseValueMultiple'].to_dataframe()
+
+    @property
+    def price_fair_value(self):
+        return self.data['priceFairValue'].to_dataframe()
+    
+    @property
+    def return_on_capital_employed(self):
+        return self.data['returnOnCapitalEmployed'].to_dataframe()
 
 
 class FinancialDataProcessor:
@@ -448,5 +695,5 @@ def alpha_example_5(fundamental_data):
 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
-    print(alpha_example_3(obj))
+    print((obj.asset_turnover))
 

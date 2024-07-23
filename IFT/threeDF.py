@@ -75,12 +75,27 @@ class FinancialDataReader:
     # Retrieve data from fmpsdk
         data1 = fmpsdk.key_metrics(apikey=self.api_key, symbol=symbol, period=period, limit=18)
         data2 = fmpsdk.income_statement(apikey=self.api_key, symbol=symbol, period=period, limit=18)
-        data3 = fmpsdk.company_profile(apikey=self.api_key, symbol=symbol)
+        data3 = fmpsdk.financial_ratios(apikey=self.api_key, symbol=symbol, period=period, limit = 18)
+        data4 = fmpsdk.company_profile(apikey=self.api_key, symbol=symbol)
+        data1 = pd.DataFrame(data1)
+        data2 = pd.DataFrame(data2)
         data3 = pd.DataFrame(data3)
+        data4 = pd.DataFrame(data4)
 
-        data =  pd.merge(pd.DataFrame(data1), pd.DataFrame(data2), on='date')
-        data['sector'] = data3['sector'].values[0]
-        return data, data3
+
+        
+        common_cols = set(data1.columns) & set(data2.columns) - {'date'}
+        data2 = data2.drop(columns=common_cols)
+        result_df = pd.merge(data1, data2, on='date')
+        common_cols = set(result_df.columns) & set(data3.columns) - {'date'}
+        data3 = data3.drop(columns=common_cols)
+        result_df = pd.merge(result_df, data3, on='date')
+
+        result_df['sector'] = data4['sector'].values[0]
+
+        return result_df, data4
+    
+
 def process_data():  # sourcery skip: remove-dict-keys
 
     column_names = ['open', 'high', 'low', 'close', 'volume'] #change
@@ -112,21 +127,30 @@ def process_data():  # sourcery skip: remove-dict-keys
         fundamental_map[company] = data_df
     df.to_csv('fundamentalData.csv', index=False)
     s_df.to_csv('sectorData.csv', index=False)
-    # data_dict = {
-    #     "firmFundamentals": (("date", "company"), np.empty((len(dates), len(companies)), dtype=object)),
-    # }
+    
 
-    data_dict = {name: (("date", "company"), np.zeros((len(dates), len(companies)))) for name in [
-        "netProfitMargin", "revenuePerShare", "netIncomePerShare", "operatingCashFlowPerShare", "freeCashFlowPerShare", "cashPerShare",
-        "bookValuePerShare", "tangibleBookValuePerShare", "shareholdersEquityPerShare", "marketCap",
-        "enterpriseValue", "peRatio", "pbRatio", "debtToEquity", "currentRatio", "interestCoverage", "roe",
-        "freeCashFlowYield", "eps"
-    ]}
-    # data_dict["sector"] = (("date", "company"), np.full((len(dates), len(companies)), '', dtype=object))
-
-    # for i in range(len(dates)):
-    #     for j in range(len(companies)):
-    #         data_dict["firmFundamentals"][1][i, j] = []
+    data_dict = {
+    name: (("date", "company"), np.zeros((len(dates), len(companies))))
+    for name in [
+        "netProfitMargin", "revenuePerShare", "netIncomePerShare", "operatingCashFlowPerShare",
+        "freeCashFlowPerShare", "cashPerShare", "bookValuePerShare", "tangibleBookValuePerShare",
+        "shareholdersEquityPerShare", "marketCap", "enterpriseValue", "peRatio", "priceToSalesRatio",
+        "pocfratio", "pfcfRatio", "pbRatio", "evToSales", "enterpriseValueOverEBITDA",
+        "evToOperatingCashFlow", "earningsYield", "freeCashFlowYield", "debtToEquity", "debtToAssets",
+        "netDebtToEBITDA", "interestCoverage", "incomeQuality", "dividendYield", "payoutRatio",
+        "salesGeneralAndAdministrativeToRevenue", "returnOnTangibleAssets", "workingCapital",
+        "tangibleAssetValue", "netCurrentAssetValue", "averageReceivables", "receivablesTurnover",
+        "capexPerShare", "quickRatio", "cashRatio", "grossProfitMargin", "returnOnAssets",
+        "returnOnCapitalEmployed", "companyEquityMultiplier", "netIncomePerEBT", "longTermDebtToCapitalization",
+        "totalDebtToCapitalization", "fixedAssetTurnover", "operatingCashFlowPerShare", "freeCashFlowPerShare",
+        "cashFlowCoverageRatios", "shortTermCoverageRatios", "capitalExpenditureCoverageRatio",
+        "dividendPaidAndCapexCoverageRatio", "daysOfSalesOutstanding", "daysOfInventoryOutstanding",
+        "operatingCycle", "daysOfPayablesOutstanding", "cashConversionCycle", "operatingProfitMargin",
+        "pretaxProfitMargin", "netProfitMargin", "effectiveTaxRate", "ebtPerEbit", "debtRatio",
+        "debtEquityRatio", "cashFlowToDebtRatio", "assetTurnover", "priceEarningsToGrowthRatio",
+        "enterpriseValueMultiple", "priceFairValue"
+    ]
+}
 
     for column_name in column_names:
         data_dict[column_name] = (("date", "company"), np.zeros((len(dates), len(companies))))
@@ -148,7 +172,6 @@ def process_data():  # sourcery skip: remove-dict-keys
                             df.loc[(date, company), metric] = fundamental_map[company].loc[index, 'netIncome'] / fundamental_map[company].loc[index, 'revenue']
                         else:
                             df.loc[(date, company), metric] = fundamental_map[company].loc[index, metric]
-                        # print(df.at[(date, company), column_name], fundamental_map[company].at[index, metric])
 
             filtered_df = stock_map.get(company, pd.DataFrame())
             if not filtered_df.empty:
@@ -157,12 +180,9 @@ def process_data():  # sourcery skip: remove-dict-keys
                     if not filtered_data.empty: 
                         df.at[(date, company), column_name] = filtered_data[column_name].values[0]
     print(df)
-    #print revenue per share of 3MINDIA on 2020-07-01
+
     ds = df.to_xarray()
 
-# Check if the file exists
-    # if os.path.exists(filename):
-        # os.remove(filename)
 
     ds.to_netcdf('my_3d_dataarray.nc')
 
