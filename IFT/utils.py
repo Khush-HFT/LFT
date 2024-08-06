@@ -325,7 +325,8 @@ class FinancialDataProcessor:
 
 
     def calculate_weights(self, sector_name):
-        alpha_string = self.alpha_function(self.fundamental_data)
+        alpha_string = self.alpha_function(self.fundamental_data)['alpha']
+        decay_x = self.alpha_function(self.fundamental_data)['decay']
         tokens = tokenize(alpha_string)
         postfix_tokens = infix_to_postfix(tokens)
         alpha_values, alpha_name = evaluate_postfix(postfix_tokens, self.values)
@@ -333,8 +334,12 @@ class FinancialDataProcessor:
         if sector_name == "All":
 
             for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
-                self.weight_matrix[i, j] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
-
+                if i == 0: 
+                    self.weight_matrix[i, j] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+                else:
+                    val1 = alpha_values.loc[self.dates['date'][i-1], self.stocks['Symbol'][j]]
+                    val2 = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+                    self.weight_matrix[i, j] = ((val1)*(decay_x-1) + val2) / decay_x
         else:
 
             if sector_name not in self.all_sectors:
@@ -352,7 +357,12 @@ class FinancialDataProcessor:
                 for j in range(len(self.stocks)):
                     check_stock = self.stocks['Symbol'][j] + '.NS'
                     if check_stock in self.sector_stocks:
-                        self.weight_matrix[i, k] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+                        if i == 0:
+                            self.weight_matrix[i, k] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+                        else:
+                            val1 = alpha_values.loc[self.dates['date'][i-1], self.stocks['Symbol'][j]]
+                            val2 = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
+                            self.weight_matrix[i, k] = ((val1)*(decay_x-1) + val2) / decay_x
                         k += 1
 
         weights = self.weight_matrix.flatten()
@@ -421,10 +431,14 @@ class FinancialDataProcessor:
         plt.ylabel('Cumulative PnL')
         plt.title('Cumulative PnL Over Time')
         plt.show()
-    
+
+
+  
 
 def tokenize(expression):
-    return re.findall(r'[a-zA-Z_]\w*(?:\.\w+)*|[\+\-\*/()]', expression)
+    return re.findall(
+        r'[a-zA-Z_]\w*(?:\.\w+)*|\b\w+\b|\d+|[\+\-\*/()]', expression
+    )
 
 def infix_to_postfix(tokens):
     precedence = {'+': 1, '-': 1, '*': 2, '/': 2}
@@ -432,8 +446,10 @@ def infix_to_postfix(tokens):
     operators = []
     
     for token in tokens:
-        if re.match(r'[a-zA-Z_]\w*(?:\.\w+)*', token):
+        if re.match(r'[a-zA-Z_]\w*(?:\.\w+)*', token) and token not in functions:
             output.append(token)
+        elif token in functions:
+            operators.append(token)
         elif token in precedence:
             while (operators and operators[-1] in precedence and
                    precedence[token] <= precedence[operators[-1]]):
@@ -445,6 +461,8 @@ def infix_to_postfix(tokens):
             while operators and operators[-1] != '(':
                 output.append(operators.pop())
             operators.pop()
+            if operators and operators[-1] in functions:
+                output.append(operators.pop())
     
     while operators:
         output.append(operators.pop())
@@ -455,8 +473,11 @@ def evaluate_postfix(postfix_tokens, values):
     # sourcery skip: avoid-builtin-shadow
     stack = []
     for token in postfix_tokens:
-        if re.match(r'[a-zA-Z_]\w*(?:\.\w+)*', token):
+        if re.match(r'[a-zA-Z_]\w*(?:\.\w+)*', token) and token not in functions:
             stack.append(values[token])
+        elif token in functions:
+            arg = stack.pop()
+            stack.append(functions[token](arg))
         else:
             b = stack.pop()
             a = stack.pop()
@@ -531,7 +552,12 @@ def divide (fundamental_data1, fundamental_data2):
 
     return new_data, 'alpha_function_result'
 
-def delta(data):
+def delta(data_array):
+
+    data, data_name = data_array
+    ranked_data = data.copy()
+    ranked_data.rename(columns={data_name: 'delta'}, inplace=True)
+
     for time_value in data.index.get_level_values('date').unique():
         for company_value in data.index.get_level_values('company').unique():
             # time_value = pd.to_datetime(time_value)
@@ -541,8 +567,9 @@ def delta(data):
                 new_date = new_date + dt.timedelta(days=1)
             while pre_date not in data.index.get_level_values('date').unique():
                 pre_date = pre_date + dt.timedelta(days=1)
-            data.loc[time_value, company_value] = data.loc[new_date, company_value] - data.loc[pre_date, company_value]
-    return data
+            ranked_data.loc[time_value, company_value] = ranked_data.loc[new_date, company_value] - ranked_data.loc[pre_date, company_value]
+    
+    return ranked_data, 'delta'
 
 def rank(data_array):
     def rescale_ranks(values):
@@ -551,15 +578,20 @@ def rank(data_array):
         rescaled_ranks = 2 * ((ranks - 1) / (n - 1)) - 1
         return rescaled_ranks
 
-    ranked_data = data_array.copy()
-    for date in data_array.index.get_level_values('date').unique():
+    data, data_name = data_array
+    ranked_data = data.copy()
+    ranked_data.rename(columns={data_name: 'rank'}, inplace=True)
+    for date in data.index.get_level_values('date').unique():
         # Handling each column separately to maintain the DataFrame structure
-        ranked_values = np.apply_along_axis(rescale_ranks, 0, data_array.loc[date].values)
+        ranked_values = np.apply_along_axis(rescale_ranks, 0, data.loc[date].values)
         ranked_data.loc[date] = ranked_values
 
-    return ranked_data
+    return ranked_data, 'rank'
 
-def ts_rank(data_array, t: int):
+def ts_rank(data):
+    t = input('Enter the value of t: ')
+    data_array, data_name = data
+    data_array.rename(columns={data_name: 'ts_rank'}, inplace=True)
     data_array = data_array[:t*len(data_array.index.get_level_values('company').unique())]
 
     def normalize_rank(rank):
@@ -577,9 +609,11 @@ def ts_rank(data_array, t: int):
         for date in data_array.index.get_level_values('date').unique():
             data_array.loc[date, company] = ranks[ind]
             ind += 1
-    return data_array
+    return data_array, 'ts_rank'
 
-def ema(x, decay : float):
+def ema(x): # review
+    decay = input('Enter the value of decay: ')
+    x, name = x
     def iterEma(x, decay):
         emaData = []
         for ind in range(len(x)):
@@ -604,7 +638,8 @@ def ema(x, decay : float):
             i += 1
     return x
 
-def rsi(data, period):
+def rsi(data):
+    period = input('Enter the value of period: ')
     for company in data.index.get_level_values('company').unique():
         array = []
         rsi_series = []
@@ -632,7 +667,8 @@ def rsi(data, period):
             )
     return data
 
-def adx(data, period):
+def adx(data):
+    period = input('Enter the value of period: ')
     def DM(high, low):
         posDM = [-1]
         negDM = [-1]
@@ -717,7 +753,9 @@ def adx(data, period):
 
     return data
     
-def macd(data, short_period, long_period):
+def macd(data):
+    short_period = input('Enter the value of short period: ')
+    long_period = input('Enter the value of long period: ')
     def emaPeriod(data, period, ind):
         emaData = []
         sum = 0
@@ -747,7 +785,8 @@ def macd(data, short_period, long_period):
             i+=1
     return data
 
-def vwap(data, period):
+def vwap(data,):
+    period = input('Enter the value of period: ')
     data = data.to_dataframe()
     for company in data.index.get_level_values('company').unique():
         volume = []
@@ -822,8 +861,19 @@ def alpha_example_5(fundamental_data):
     fundamental_data_npm.rename(columns={'netProfitMargin': 'alpha_example_5_result'}, inplace=True)
     return fundamental_data_npm
 
+def temp(data):
+    return data
+functions = {
+    'temp' : temp,
+    'delta': delta,
+    'rank': rank,
+    'ts_rank': ts_rank,
+    'ema': ema,
+    'rsi': rsi,
+    'adx': adx,
+    'macd': macd,
+    'vwap': vwap,
 
+} 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
-    obj2 = FinancialDataProcessor('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv', alpha_example_1)
-
