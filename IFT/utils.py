@@ -432,6 +432,41 @@ class FinancialDataProcessor:
         plt.title('Cumulative PnL Over Time')
         plt.show()
 
+    def calculate_pnl_quality(self):
+        num_days, num_stocks = self.pnl_matrix.shape
+
+        # Daily Returns
+        daily_returns = self.pnl_matrix[1:] - self.pnl_matrix[:-1]
+        print(daily_returns)
+
+        # Metrics
+        metrics = {'std_dev_daily_pnl': np.std(daily_returns)}
+
+        # Sharpe Ratio
+        annualized_return = np.sum(daily_returns) / num_days * 252  # Assuming 252 trading days in a year
+        annualized_volatility = np.std(daily_returns) * np.sqrt(252)
+        metrics['sharpe_ratio'] = annualized_return / annualized_volatility if annualized_volatility != 0 else 0
+
+        # 2. Maximum Drawback
+        cumulative_pnl = np.cumsum(self.pnl_matrix, axis=0)
+        peak = np.maximum.accumulate(cumulative_pnl)
+        drawdowns = (peak - cumulative_pnl) / peak
+        metrics['max_drawdown'] = np.max(drawdowns)
+
+        # 3. Returns
+        metrics['average_daily_return'] = cumulative_pnl[-1] / num_days
+
+        # 4. Turnover
+        daily_positions = self.pnl_matrix
+        daily_turnover = np.zeros(num_days - 1)
+        for i in range(1, num_days):
+            daily_turnover[i-1] = np.sum(np.abs(daily_positions[i] - daily_positions[i-1]))
+        average_daily_turnover = np.mean(daily_turnover)
+        
+        metrics['average_turnover'] = average_daily_turnover
+
+        return metrics
+
 
   
 
