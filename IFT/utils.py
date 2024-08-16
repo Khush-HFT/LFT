@@ -300,6 +300,7 @@ class FinancialDataProcessor:
         self.all_sectors = self.fundamental_data.sectorData['sector'].unique()
         self.sector_stocks = []
         self.values = {
+            'fundamental_data.data': self.fundamental_data.data,
             'fundamental_data.npm': self.fundamental_data.npm,
             'fundamental_data.dte': self.fundamental_data.dte,
             'fundamental_data.netProfitMargin': self.fundamental_data.net_profit_margin,
@@ -329,11 +330,14 @@ class FinancialDataProcessor:
         decay_x = self.alpha_function(self.fundamental_data)['decay']
         tokens = tokenize(alpha_string)
         postfix_tokens = infix_to_postfix(tokens)
+        # print(tokens, postfix_tokens)
         alpha_values, alpha_name = evaluate_postfix(postfix_tokens, self.values)
 
+        # print(alpha_values[:30])
+        date_len = len(alpha_values.index.get_level_values('date').unique())
         if sector_name == "All":
 
-            for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
+            for i, j in itertools.product(range(date_len), range(len(self.stocks))):
                 if i == 0: 
                     self.weight_matrix[i, j] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
                 else:
@@ -366,12 +370,20 @@ class FinancialDataProcessor:
                         k += 1
 
         weights = self.weight_matrix.flatten()
-        normalized_weights = weights - np.mean(weights)
+        weights[np.isnan(weights)] = 0 
+
+        std_dev_weight = np.std(weights)
+        mean_weight = np.mean(weights)
+
+        epsilon = 1e-8
+        normalized_weights = (weights - mean_weight) / (std_dev_weight + epsilon)
+
+        desired_total = 250
         total_abs_sum = np.sum(np.abs(normalized_weights))
-        adjustment_factor = 250 / total_abs_sum
+        adjustment_factor = desired_total / total_abs_sum if total_abs_sum != 0 else 0
+        
         adjusted_weights = normalized_weights * adjustment_factor
         self.normalized_weight_matrix = adjusted_weights.reshape(self.weight_matrix.shape)
-        print(self.all_sectors)
 
 
     def calculate_pnl(self, sector_name):
@@ -405,7 +417,6 @@ class FinancialDataProcessor:
                 self.cumulative_pnl_matrix[i, :] = self.pnl_matrix[i, :]
             else:
                 self.cumulative_pnl_matrix[i, :] = self.cumulative_pnl_matrix[i-1, :] + self.pnl_matrix[i, :]
-        print(self.cumulative_pnl_matrix)
         return self.cumulative_pnl_matrix
 
     def plot_daily_pnl(self, sector_name):
@@ -437,7 +448,7 @@ class FinancialDataProcessor:
 
         # Daily Returns
         daily_returns = self.pnl_matrix[1:] - self.pnl_matrix[:-1]
-        print(daily_returns)
+        # print(daily_returns)
 
         # Metrics
         metrics = {'std_dev_daily_pnl': np.std(daily_returns)}
@@ -468,15 +479,15 @@ class FinancialDataProcessor:
         return metrics
 
 
-  
+
 
 def tokenize(expression):
     return re.findall(
-        r'[a-zA-Z_]\w*(?:\.\w+)*|\b\w+\b|\d+|[\+\-\*/()]', expression
+        r'[a-zA-Z_]\w*(?:\.\w+)*|\b\w+\b|\d+|\S', expression
     )
 
 def infix_to_postfix(tokens):
-    precedence = {'+': 1, '-': 1, '*': 2, '/': 2}
+    precedence = {'+': 1, '-': 1, '*': 2, '/': 2, ',': 3}
     output = []
     operators = []
     
@@ -498,6 +509,8 @@ def infix_to_postfix(tokens):
             operators.pop()
             if operators and operators[-1] in functions:
                 output.append(operators.pop())
+        else:  # Handle numeric values directly
+            output.append(token)
     
     while operators:
         output.append(operators.pop())
@@ -505,14 +518,19 @@ def infix_to_postfix(tokens):
     return output
 
 def evaluate_postfix(postfix_tokens, values):
-    # sourcery skip: avoid-builtin-shadow
     stack = []
     for token in postfix_tokens:
         if re.match(r'[a-zA-Z_]\w*(?:\.\w+)*', token) and token not in functions:
             stack.append(values[token])
+        elif re.match(r'\d+', token): 
+            stack.append(token)  
         elif token in functions:
             arg = stack.pop()
-            stack.append(functions[token](arg))
+            if type(arg) is list:
+                stack.append(functions[token](arg[0], arg[1]))
+
+            else:
+                stack.append(functions[token](arg))
         else:
             b = stack.pop()
             a = stack.pop()
@@ -524,6 +542,8 @@ def evaluate_postfix(postfix_tokens, values):
                 stack.append(multiply(a, b))
             elif token == '/':
                 stack.append(divide(a, b))
+            elif token == ',':
+                stack.append(concatenate(a, b))  
     return stack[0]
 
 
@@ -587,6 +607,9 @@ def divide (fundamental_data1, fundamental_data2):
 
     return new_data, 'alpha_function_result'
 
+def concatenate(data, value):
+    return [data, value]
+
 def delta(data_array):
 
     data, data_name = data_array
@@ -623,12 +646,11 @@ def rank(data_array):
 
     return ranked_data, 'rank'
 
-def ts_rank(data):
-    t = input('Enter the value of t: ')
+def ts_rank(data, t):
+    t = int(t)
     data_array, data_name = data
     data_array.rename(columns={data_name: 'ts_rank'}, inplace=True)
     data_array = data_array[:t*len(data_array.index.get_level_values('company').unique())]
-
     def normalize_rank(rank):
         return (rank - 1) / (t - 1)
 
@@ -644,10 +666,11 @@ def ts_rank(data):
         for date in data_array.index.get_level_values('date').unique():
             data_array.loc[date, company] = ranks[ind]
             ind += 1
+    # print(len(data_array.index.get_level_values('date').unique()))
     return data_array, 'ts_rank'
 
-def ema(x): # review
-    decay = input('Enter the value of decay: ')
+def ema(x, decay): 
+    decay = int(decay)
     x, name = x
     def iterEma(x, decay):
         emaData = []
@@ -671,10 +694,11 @@ def ema(x): # review
         for date in x.index.get_level_values('date').unique():
             x.loc[(date, company), 'close'] = emaData[i]
             i += 1
-    return x
+    return x, 'ema'
 
-def rsi(data):
-    period = input('Enter the value of period: ')
+def rsi(data, period):
+
+    period = int(period)
     for company in data.index.get_level_values('company').unique():
         array = []
         rsi_series = []
@@ -702,8 +726,8 @@ def rsi(data):
             )
     return data
 
-def adx(data):
-    period = input('Enter the value of period: ')
+def adx(data, period):
+    period = int(period)
     def DM(high, low):
         posDM = [-1]
         negDM = [-1]
@@ -753,8 +777,8 @@ def adx(data):
 
         ADXval(DX, period, index + 1)
 
-        
-    
+    dummy = data['marketCap'].to_dataframe()
+    dummy.rename(columns={'marketCap': 'adx'}, inplace=True)
     data = data.to_dataframe()
     for company in data.index.get_level_values('company').unique():
         high = []
@@ -783,14 +807,14 @@ def adx(data):
         ADXvals.reverse()
         ind = 0
         for date in data.index.get_level_values('date').unique():
-            data.loc[(date, company), 'adx'] = ADXvals[ind]
+            dummy.loc[(date, company), 'adx'] = ADXvals[ind]
             ind += 1
 
-    return data
+    return dummy, 'adx'
     
-def macd(data):
-    short_period = input('Enter the value of short period: ')
-    long_period = input('Enter the value of long period: ')
+def macd(data, short_period, long_period):
+    short_period = int(short_period)
+    long_period = int(long_period)
     def emaPeriod(data, period, ind):
         emaData = []
         sum = 0
@@ -820,8 +844,7 @@ def macd(data):
             i+=1
     return data
 
-def vwap(data,):
-    period = input('Enter the value of period: ')
+def vwap(data, period):
     data = data.to_dataframe()
     for company in data.index.get_level_values('company').unique():
         volume = []
@@ -902,13 +925,13 @@ functions = {
     'temp' : temp,
     'delta': delta,
     'rank': rank,
-    'ts_rank': ts_rank,
     'ema': ema,
     'rsi': rsi,
     'adx': adx,
     'macd': macd,
     'vwap': vwap,
-
+    'ts_rank' : ts_rank,
 } 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
+    # print(adx(obj.data, 15))
