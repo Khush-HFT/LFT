@@ -437,6 +437,8 @@ class FinancialDataProcessor:
             cumulative_pnl_df = pd.DataFrame(self.cumulative_pnl_matrix, index=self.dates['date'], columns=self.stocks['Symbol'])
         else:
             cumulative_pnl_df = pd.DataFrame(self.cumulative_pnl_matrix, index=self.dates['date'], columns=self.sector_stocks)
+        
+        cumulative_pnl_df = cumulative_pnl_df.sort_index(ascending=True)
         cumulative_pnl = cumulative_pnl_df.sum(axis=1)
         cumulative_pnl.plot()
         plt.xlabel('Date')
