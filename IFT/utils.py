@@ -322,6 +322,7 @@ class FinancialDataProcessor:
             'fundamental_data.marketCap': self.fundamental_data.market_cap,
             'fundamental_data.close': self.fundamental_data.close,
             'fundamental_data.cr': self.fundamental_data.cr,
+            'fundamental_data.peRatio' : self.fundamental_data.per,
         }
 
 
@@ -646,6 +647,37 @@ def rank(data_array):
 
     return ranked_data, 'rank'
 
+def ma(data_array, period):
+    period = int(period)
+    data, data_name = data_array
+    ma_data = data.copy()
+    ma_data.rename(columns={data_name: 'ma'}, inplace=True)
+
+    for company in ma_data.index.get_level_values('company').unique():
+        array = []
+        ma_series = []
+        for date in ma_data.index.get_level_values('date').unique():
+            # print(date)
+            array.extend(iter(ma_data.loc[date, company].values))
+
+
+        array.reverse()
+        for i in range(len(array)):
+            if np.isnan(array[i]):
+                array[i] = 0
+        
+        for i in range(len(array)):
+            if i < period:
+                ma_series.append(np.nan)
+            else:
+                ma_series.append(np.mean(array[i-period:i]))
+        
+        for date in ma_data.index.get_level_values('date').unique():
+            ma_data.loc[date, company] = ma_series.pop(-1)
+
+    return ma_data, 'ma_data'
+
+
 def ts_rank(data, t):
     t = int(t)
     data_array, data_name = data
@@ -672,6 +704,8 @@ def ts_rank(data, t):
 def ema(x, decay): 
     decay = int(decay)
     x, name = x
+    x.rename(columns={name: 'ema'}, inplace=True)
+    print(x)
     def iterEma(x, decay):
         emaData = []
         for ind in range(len(x)):
@@ -692,7 +726,7 @@ def ema(x, decay):
         emaData.reverse()
         i = 0
         for date in x.index.get_level_values('date').unique():
-            x.loc[(date, company), 'close'] = emaData[i]
+            x.loc[(date, company), 'ema'] = emaData[i]
             i += 1
     return x, 'ema'
 
@@ -876,6 +910,8 @@ def vwap(data, period):
                     
     return data
 
+
+
 def alpha_example_1(fundamental_data):
     return fundamental_data.rps
 
@@ -919,6 +955,7 @@ def alpha_example_5(fundamental_data):
     fundamental_data_npm.rename(columns={'netProfitMargin': 'alpha_example_5_result'}, inplace=True)
     return fundamental_data_npm
 
+
 def temp(data):
     return data
 functions = {
@@ -934,4 +971,4 @@ functions = {
 } 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
-    # print(adx(obj.data, 15))
+    print(ema(obj.close, 20))
