@@ -324,6 +324,7 @@ class FinancialDataProcessor:
             'fundamental_data.cr': self.fundamental_data.cr,
             'fundamental_data.peRatio' : self.fundamental_data.per,
             'fundamental_data.close' : self.fundamental_data.close,
+            'fundamental_data.eps' : self.fundamental_data.eps,
         }
 
 
@@ -371,7 +372,9 @@ class FinancialDataProcessor:
                             self.weight_matrix[i, k] = ((val1)*(decay_x-1) + val2) / decay_x
                         k += 1
 
+        print(self.weight_matrix)
         weights = self.weight_matrix.flatten()
+
         weights[np.isnan(weights)] = 0 
 
         std_dev_weight = np.std(weights)
@@ -380,45 +383,81 @@ class FinancialDataProcessor:
         epsilon = 1e-8
         normalized_weights = (weights - mean_weight) / (std_dev_weight + epsilon)
 
-        desired_total = 250
+        desired_total = 1
         total_abs_sum = np.sum(np.abs(normalized_weights))
         adjustment_factor = desired_total / total_abs_sum if total_abs_sum != 0 else 0
         
         adjusted_weights = normalized_weights * adjustment_factor
         self.normalized_weight_matrix = adjusted_weights.reshape(self.weight_matrix.shape)
 
+        print(self.normalized_weight_matrix)
 
     def calculate_pnl(self, sector_name):
         
+        # if sector_name == "All":
+        #     for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
+        #         # div = 1
+        #         # if(i > 0):
+        #         #     div = (self.data.at[(self.dates['date'][i-1], self.stocks['Symbol'][j]), 'close'])
+        #         daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
+        #                     self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
+        #         daily_pnl *= (self.normalized_weight_matrix[i, j]*100)
+        #         self.pnl_matrix[i, j] = daily_pnl
+        # else:
+        #     if sector_name not in self.all_sectors:
+        #         raise ValueError("Sector not found")
+        #     self.pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
+        #     self.cumulative_pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
+
+        #     for i in range(len(self.dates)):
+        #         k = 0
+        #         for j in range(len(self.stocks)):
+        #             check_stock = self.stocks['Symbol'][j] + '.NS'
+        #             if check_stock in self.sector_stocks:
+        #                 daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
+        #                     self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
+        #                 daily_pnl *= self.normalized_weight_matrix[i, k]
+        #                 self.pnl_matrix[i, k] = daily_pnl
+        #                 k += 1
+
         if sector_name == "All":
-            for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
+            for i, j in itertools.product(range(len(self.dates) - 1, -1, -1), range(len(self.stocks))):
                 daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
                             self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
-                daily_pnl *= self.normalized_weight_matrix[i, j]
+                daily_pnl *= (self.normalized_weight_matrix[i, j] * 100)
                 self.pnl_matrix[i, j] = daily_pnl
         else:
             if sector_name not in self.all_sectors:
                 raise ValueError("Sector not found")
+            
             self.pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
             self.cumulative_pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
 
-            for i in range(len(self.dates)):
+            for i in range(len(self.dates) - 1, -1, -1):
                 k = 0
                 for j in range(len(self.stocks)):
                     check_stock = self.stocks['Symbol'][j] + '.NS'
                     if check_stock in self.sector_stocks:
                         daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
-                            self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
+                                    self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
                         daily_pnl *= self.normalized_weight_matrix[i, k]
                         self.pnl_matrix[i, k] = daily_pnl
                         k += 1
 
 
-        for i in range(len(self.dates)):
-            if i == 0:
+        # for i in range(len(self.dates)):
+        #     if i == 0:
+        #         self.cumulative_pnl_matrix[i, :] = self.pnl_matrix[i, :]
+        #     else:
+        #         self.cumulative_pnl_matrix[i, :] = self.cumulative_pnl_matrix[i-1, :] + self.pnl_matrix[i, :]
+
+        for i in range(len(self.dates) - 1, -1, -1):  # Start from the last index and move backwards
+            if i == len(self.dates) - 1:  # If it's the last index (earliest date)
                 self.cumulative_pnl_matrix[i, :] = self.pnl_matrix[i, :]
             else:
-                self.cumulative_pnl_matrix[i, :] = self.cumulative_pnl_matrix[i-1, :] + self.pnl_matrix[i, :]
+                self.cumulative_pnl_matrix[i, :] = self.cumulative_pnl_matrix[i+1, :] + self.pnl_matrix[i, :]
+        # print(self.pnl_matrix)
+        # print(self.cumulative_pnl_matrix)
         return self.cumulative_pnl_matrix
 
     def plot_daily_pnl(self, sector_name):
@@ -446,6 +485,10 @@ class FinancialDataProcessor:
         plt.ylabel('Cumulative PnL')
         plt.title('Cumulative PnL Over Time')
         plt.show()
+
+    
+
+    
 
     def calculate_pnl_quality(self):
         num_days, num_stocks = self.pnl_matrix.shape
@@ -989,4 +1032,4 @@ functions = {
 } 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
-    print(adx(obj.data, 5))
+    print(obj.eps)

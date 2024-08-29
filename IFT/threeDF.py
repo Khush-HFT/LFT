@@ -34,11 +34,11 @@ class FinancialDataReader:
         # Retrieve data from fmpsdk
         with ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(fmpsdk.key_metrics, apikey=self.api_key, symbol=symbol, period=period, limit=18),
-                executor.submit(fmpsdk.income_statement, apikey=self.api_key, symbol=symbol, period=period, limit=18),
-                executor.submit(fmpsdk.financial_ratios, apikey=self.api_key, symbol=symbol, period=period, limit=18),
+                executor.submit(fmpsdk.key_metrics, apikey=self.api_key, symbol=symbol, period=period, limit=43),
+                executor.submit(fmpsdk.income_statement, apikey=self.api_key, symbol=symbol, period=period, limit=43),
+                executor.submit(fmpsdk.financial_ratios, apikey=self.api_key, symbol=symbol, period=period, limit=43),
                 executor.submit(fmpsdk.company_profile, apikey=self.api_key, symbol=symbol),
-                executor.submit(fmpsdk.historical_price_full, apikey=self.api_key, symbol=symbol, from_date="2020-07-01", to_date="2024-06-28")
+                executor.submit(fmpsdk.historical_price_full, apikey=self.api_key, symbol=symbol, from_date="2014-01-01", to_date="2024-06-28")
             ]
             data1, data2, data3, data4, data5 = [f.result() for f in futures]
 
@@ -207,7 +207,8 @@ def process_data():
             "priceCashFlowRatio",
             "priceEarningsToGrowthRatio",
             "enterpriseValueMultiple",
-            "priceFairValue"
+            "priceFairValue",
+            "eps"
             ]
 
     }
