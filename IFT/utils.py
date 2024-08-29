@@ -323,6 +323,7 @@ class FinancialDataProcessor:
             'fundamental_data.close': self.fundamental_data.close,
             'fundamental_data.cr': self.fundamental_data.cr,
             'fundamental_data.peRatio' : self.fundamental_data.per,
+            'fundamental_data.close' : self.fundamental_data.close,
         }
 
 
@@ -553,15 +554,21 @@ def evaluate_postfix(postfix_tokens, values):
 def add (fundamental_data1, fundamental_data2):
     # sourcery skip: avoid-builtin-shadow
     data1, fundamental_data1_name = fundamental_data1
-    data2, fundamental_data2_name = fundamental_data2
-
     new_data = data1.copy()
     new_data.rename(columns={fundamental_data1_name: 'alpha_function_result'}, inplace=True)
 
-    for company in new_data.index.get_level_values('company').unique():
-        for date in new_data.index.get_level_values('date').unique():
-            sum = data1.loc[(date, company), fundamental_data1_name] + data2.loc[(date, company), fundamental_data2_name]
-            new_data.loc[(date, company), 'alpha_function_result'] = sum
+    if (type(fundamental_data2) is not tuple):
+        val = int(fundamental_data2)
+        for company in new_data.index.get_level_values('company').unique():
+            for date in new_data.index.get_level_values('date').unique():
+                sum = data1.loc[(date, company), fundamental_data1_name] + val
+                new_data.loc[(date, company), 'alpha_function_result'] = sum
+    else:
+        data2, fundamental_data2_name = fundamental_data2
+        for company in new_data.index.get_level_values('company').unique():
+            for date in new_data.index.get_level_values('date').unique():
+                sum = data1.loc[(date, company), fundamental_data1_name] + data2.loc[(date, company), fundamental_data2_name]
+                new_data.loc[(date, company), 'alpha_function_result'] = sum
 
     return new_data, 'alpha_function_result'
 
@@ -598,15 +605,21 @@ def multiply (fundamental_data1, fundamental_data2):
 def divide (fundamental_data1, fundamental_data2):
     # sourcery skip: avoid-builtin-shadow
     data1, fundamental_data1_name = fundamental_data1
-    data2, fundamental_data2_name = fundamental_data2
-
     new_data = data1.copy()
     new_data.rename(columns={fundamental_data1_name: 'alpha_function_result'}, inplace=True)
 
-    for company in new_data.index.get_level_values('company').unique():
-        for date in new_data.index.get_level_values('date').unique():
-            quotient = data1.loc[(date, company), fundamental_data1_name] / data2.loc[(date, company), fundamental_data2_name]
-            new_data.loc[(date, company), 'alpha_function_result'] = quotient
+    if (type(fundamental_data2) is not tuple):
+        val = int(fundamental_data2)
+        for company in new_data.index.get_level_values('company').unique():
+            for date in new_data.index.get_level_values('date').unique():
+                quotient = data1.loc[(date, company), fundamental_data1_name] / val
+                new_data.loc[(date, company), 'alpha_function_result'] = quotient
+    else:
+        data2, fundamental_data2_name = fundamental_data2
+        for company in new_data.index.get_level_values('company').unique():
+            for date in new_data.index.get_level_values('date').unique():
+                quotient = data1.loc[(date, company), fundamental_data1_name] / data2.loc[(date, company), fundamental_data2_name]
+                new_data.loc[(date, company), 'alpha_function_result'] = quotient
 
     return new_data, 'alpha_function_result'
 
@@ -881,12 +894,15 @@ def macd(data, short_period, long_period):
     return data
 
 def vwap(data, period):
+    period = int(period)
+    data_new = data['close'].to_dataframe()
+    data_new.rename(columns={'close': 'vwap'}, inplace=True)
     data = data.to_dataframe()
     for company in data.index.get_level_values('company').unique():
         volume = []
         price = []
         for date in data.index.get_level_values('date').unique():
-            data.loc[(date, company), 'vwap'] = np.nan
+            data_new.loc[(date, company), 'vwap'] = np.nan
             volume.append(data.loc[(date, company), 'volume'])
             price.append(data.loc[(date, company), 'close'])
         volume.reverse()
@@ -908,9 +924,9 @@ def vwap(data, period):
                 vwap.append((priceSum*volumeSum) / volumeSum)
 
         for date in data.index.get_level_values('date').unique():
-            data.loc[(date, company), 'vwap'] = vwap.pop()
+            data_new.loc[(date, company), 'vwap'] = vwap.pop()
                     
-    return data
+    return data_new, 'vwap'
 
 
 
@@ -973,4 +989,4 @@ functions = {
 } 
 if __name__ == "__main__":
     obj = FundamentalData('date.csv', 'ind_nifty500list.csv', 'my_3d_dataarray.nc', 'sectorData.csv')
-    print(ema(obj.close, 20))
+    print(adx(obj.data, 5))
