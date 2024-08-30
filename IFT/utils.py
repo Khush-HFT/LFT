@@ -331,15 +331,16 @@ class FinancialDataProcessor:
     def calculate_weights(self, sector_name):
         alpha_string = self.alpha_function(self.fundamental_data)['alpha']
         decay_x = self.alpha_function(self.fundamental_data)['decay']
+        neutralisation = self.alpha_function(self.fundamental_data)['neutralisation']
         tokens = tokenize(alpha_string)
         postfix_tokens = infix_to_postfix(tokens)
-        # print(tokens, postfix_tokens)
+        number_of_stocks = 0
+
         alpha_values, alpha_name = evaluate_postfix(postfix_tokens, self.values)
 
-        # print(alpha_values[:30])
         date_len = len(alpha_values.index.get_level_values('date').unique())
         if sector_name == "All":
-
+            number_of_stocks = len(self.stocks)
             for i, j in itertools.product(range(date_len), range(len(self.stocks))):
                 if i == 0: 
                     self.weight_matrix[i, j] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
@@ -357,6 +358,7 @@ class FinancialDataProcessor:
                 for i in range(len(self.fundamental_data.sectorData))
                 if self.fundamental_data.sectorData['sector'][i] == sector_name
             ]
+            number_of_stocks = len(self.sector_stocks)
             self.weight_matrix = np.zeros((len(self.dates), len(self.sector_stocks)))
 
             for i in range(len(self.dates)):
@@ -373,20 +375,17 @@ class FinancialDataProcessor:
                         k += 1
 
         print(self.weight_matrix)
+
+
         weights = self.weight_matrix.flatten()
-
         weights[np.isnan(weights)] = 0 
-
-        std_dev_weight = np.std(weights)
-        mean_weight = np.mean(weights)
-
-        epsilon = 1e-8
-        normalized_weights = (weights - mean_weight) / (std_dev_weight + epsilon)
-
+        normalized_weights = weights
+        if neutralisation == 'neutr.market':
+            normalized_weights = normalized_weights + np.sum(normalized_weights) / number_of_stocks
         desired_total = 1
         total_abs_sum = np.sum(np.abs(normalized_weights))
         adjustment_factor = desired_total / total_abs_sum if total_abs_sum != 0 else 0
-        
+                
         adjusted_weights = normalized_weights * adjustment_factor
         self.normalized_weight_matrix = adjusted_weights.reshape(self.weight_matrix.shape)
 
@@ -394,31 +393,6 @@ class FinancialDataProcessor:
 
     def calculate_pnl(self, sector_name):
         
-        # if sector_name == "All":
-        #     for i, j in itertools.product(range(len(self.dates)), range(len(self.stocks))):
-        #         # div = 1
-        #         # if(i > 0):
-        #         #     div = (self.data.at[(self.dates['date'][i-1], self.stocks['Symbol'][j]), 'close'])
-        #         daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
-        #                     self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
-        #         daily_pnl *= (self.normalized_weight_matrix[i, j]*100)
-        #         self.pnl_matrix[i, j] = daily_pnl
-        # else:
-        #     if sector_name not in self.all_sectors:
-        #         raise ValueError("Sector not found")
-        #     self.pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
-        #     self.cumulative_pnl_matrix = np.zeros((len(self.dates), len(self.weight_matrix[0])))
-
-        #     for i in range(len(self.dates)):
-        #         k = 0
-        #         for j in range(len(self.stocks)):
-        #             check_stock = self.stocks['Symbol'][j] + '.NS'
-        #             if check_stock in self.sector_stocks:
-        #                 daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
-        #                     self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
-        #                 daily_pnl *= self.normalized_weight_matrix[i, k]
-        #                 self.pnl_matrix[i, k] = daily_pnl
-        #                 k += 1
 
         if sector_name == "All":
             for i, j in itertools.product(range(len(self.dates) - 1, -1, -1), range(len(self.stocks))):
