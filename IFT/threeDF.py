@@ -85,10 +85,11 @@ def process_data():
             historical_df,
         ) = financial_data_reader.get_key_metrics(f'{company}.NS')
 
+        sector_df = pd.DataFrame(sector_df)
         if s_df.empty:
-            s_df = pd.DataFrame(sector_df)
+            s_df = sector_df
         else:   
-            s_df = pd.concat([s_df, pd.DataFrame(sector_df)], ignore_index=True)
+            s_df = pd.concat([s_df, sector_df], ignore_index=True)
 
         historical_df['date'] = pd.to_datetime(historical_df['date'])
         h_df = pd.DataFrame(historical_df)
