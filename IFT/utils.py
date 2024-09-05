@@ -16,7 +16,6 @@ class FundamentalData:
         self.stocks_df = pd.read_csv(stocks_file)
         self.data = xr.open_dataset(data_file)
         self.sectorData = pd.read_csv(sector_file)
-        self.universe = 0
     
 
     @property
@@ -328,31 +327,46 @@ class FinancialDataProcessor:
             'fundamental_data.eps' : self.fundamental_data.eps,
         }
 
+    def getTopCompanies(self, universe_selector, universe, stocks):
+        universe = min(universe, len(stocks))
+
+        def sortComapniesByGivenUniverse(universe):
+            if universe_selector == 'fundamental_data.marketCap':
+                df_sorted = stocks.sort_values(by='marketCap', ascending=False).reset_index(drop=True)
+                return df_sorted.head(universe)
+            
+            elif universe_selector == 'fundamental_data.ebitda':
+                df_sorted = stocks.sort_values(by='ebitda', ascending=False).reset_index(drop=True)
+                return df_sorted.head(universe)
+
+        return sortComapniesByGivenUniverse(universe)
+        
 
     def calculate_weights(self, sector_name):
         alpha_string = self.alpha_function(self.fundamental_data)['alpha']
         decay_x = self.alpha_function(self.fundamental_data)['decay']
         neutralisation = self.alpha_function(self.fundamental_data)['neutralisation']
-        given_universe = self.alpha_function(self.fundamental_data)['universe']
-        self.universe = given_universe
-        self.universe = min(self.universe, len(self.stocks))
+        universe = self.alpha_function(self.fundamental_data)['universe']
+
+        universe_selector = self.alpha_function(self.fundamental_data)['universe_selector']
+
+        self.stocks = self.getTopCompanies(universe_selector, universe, self.stocks)
+        print(self.stocks)
 
         tokens = tokenize(alpha_string)
         postfix_tokens = infix_to_postfix(tokens)
         number_of_stocks = 0
         number_of_sectors = 0
-
         alpha_values, alpha_name = evaluate_postfix(postfix_tokens, self.values)
 
         date_len = len(alpha_values.index.get_level_values('date').unique())
 
         # print(date_len)
         if sector_name == "All":
-            # number_of_stocks = len(self.stocks)
-            number_of_stocks = self.universe
             number_of_sectors = len(self.all_sectors)
-            self.weight_matrix = np.zeros((len(self.dates), number_of_stocks))
-            for i, j in itertools.product(range(date_len), range(self.universe)):
+            number_of_stocks = len(self.stocks)
+            self.weight_matrix = np.zeros((len(self.dates), len(self.stocks)))
+            for i, j in itertools.product(range(date_len), range(len(self.stocks))):
                 if i == 0: 
                     self.weight_matrix[i, j] = alpha_values.loc[self.dates['date'][i], self.stocks['Symbol'][j]]
                 else:
@@ -365,12 +379,6 @@ class FinancialDataProcessor:
                 raise ValueError("Sector not found")
 
             number_of_sectors = 1
-            # Get the stocks for the specified sector
-            all_sector_stocks = [
-                self.fundamental_data.sectorData['symbol'][i]
-                for i in range(len(self.fundamental_data.sectorData))
-                if self.fundamental_data.sectorData['sector'][i] == sector_name
-            ]
 
             # Limit the number of stocks in sector_stocks based on universe, ensuring not to exceed available stocks
             self.sector_stocks = [
@@ -378,7 +386,6 @@ class FinancialDataProcessor:
                 for i in range(len(self.fundamental_data.sectorData))
                 if self.fundamental_data.sectorData['sector'][i] == sector_name
             ]
-            self.sector_stocks = self.sector_stocks[:min(self.universe, len(self.sector_stocks))]
 
             number_of_stocks = len(self.sector_stocks)
             self.weight_matrix = np.zeros((len(self.dates), len(self.sector_stocks)))
@@ -406,7 +413,6 @@ class FinancialDataProcessor:
         print(normalized_weights)
 
         if neutralisation == 'neutr.market':
-
             for i in range(len(self.dates)):
                 normalized_weights[i] = normalized_weights[i] - np.sum(normalized_weights[i]) / number_of_stocks
         elif neutralisation == 'neutr.sector':
@@ -422,12 +428,15 @@ class FinancialDataProcessor:
         self.normalized_weight_matrix = adjusted_weights.reshape(self.weight_matrix.shape)
 
         # print(self.normalized_weight_matrix)
+        # print(len(self.normalized_weight_matrix[0]))
 
     def calculate_pnl(self, sector_name):
         
 
         if sector_name == "All":
-            for i, j in itertools.product(range(len(self.dates) - 1, -1, -1), range(self.universe)):
+            self.pnl_matrix = np.zeros((len(self.dates), len(self.stocks)))
+            self.cumulative_pnl_matrix = np.zeros((len(self.dates), len(self.stocks)))
+            for i, j in itertools.product(range(len(self.dates) - 1, -1, -1), range(len(self.stocks))):
                 daily_pnl = (self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'close'] - 
                             self.data.at[(self.dates['date'][i], self.stocks['Symbol'][j]), 'open'])
                 daily_pnl *= (self.normalized_weight_matrix[i, j] * 100)
@@ -463,20 +472,20 @@ class FinancialDataProcessor:
             else:
                 self.cumulative_pnl_matrix[i, :] = self.cumulative_pnl_matrix[i+1, :] + self.pnl_matrix[i, :]
         # print(self.pnl_matrix)
-        # print(self.cumulative_pnl_matrix)
+        # print(len(self.pnl_matrix[0]), len(self.cumulative_pnl_matrix))
         return self.cumulative_pnl_matrix
 
-    def plot_daily_pnl(self, sector_name):
-        if sector_name == "All":
-            pnl_df = pd.DataFrame(self.pnl_matrix, index=self.dates['date'], columns=self.stocks['Symbol'])
-        else:   
-            pnl_df = pd.DataFrame(self.pnl_matrix, index=self.dates['date'], columns=self.sector_stocks)
+    # def plot_daily_pnl(self, sector_name):
+    #     if sector_name == "All":
+    #         pnl_df = pd.DataFrame(self.pnl_matrix, index=self.dates['date'], columns=self.stocks['Symbol'])
+    #     else:   
+    #         pnl_df = pd.DataFrame(self.pnl_matrix, index=self.dates['date'], columns=self.sector_stocks)
 
-        daily_pnl = pnl_df.sum(axis=1)
-        daily_pnl.plot()
-        plt.xlabel('Date')
-        plt.ylabel('PnL')
-        plt.show()
+    #     daily_pnl = pnl_df.sum(axis=1)
+    #     daily_pnl.plot()
+    #     plt.xlabel('Date')
+    #     plt.ylabel('PnL')
+    #     plt.show()
 
     def plot_cumulative_pnl(self, sector_name):
         if sector_name == "All":
